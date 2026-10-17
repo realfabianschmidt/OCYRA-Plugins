@@ -1,0 +1,17 @@
+{
+  "id": "audit-foundation-policy",
+  "name": "Foundation policy fixture",
+  "version": "0.1.0",
+  "plugin_api_version": 1,
+  "role": "audit.policy-provider",
+  "runtime": "quickjs",
+  "entry": "handler.js",
+  "capabilities": ["host.data.read"],
+  "limits": {
+    "maxBatchItems": 3600,
+    "maxInputBytes": 8388608,
+    "maxOutputBytes": 8388608,
+    "timeoutMs": 5000,
+    "memoryBytes": 67108864
+  }
+}

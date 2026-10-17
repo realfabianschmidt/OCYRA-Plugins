@@ -1,0 +1,13 @@
+{
+  "profileId": "foundation-fixture",
+  "profileName": "Synthetic foundation fixture",
+  "profileVersion": "0.1.0",
+  "standardsReference": "fixture-only",
+  "maxCharsPerSecond": 20,
+  "maxLineLength": 42,
+  "maxLines": 2,
+  "checklist": [
+    { "id": "text-length", "title": "Text length", "appliesToVideo": false },
+    { "id": "video-context", "title": "Video context", "appliesToVideo": true }
+  ]
+}

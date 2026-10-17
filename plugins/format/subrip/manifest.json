@@ -1,0 +1,17 @@
+{
+  "id": "format-plugin-subrip",
+  "name": "SubRip (SRT)",
+  "version": "0.1.0",
+  "plugin_api_version": 1,
+  "role": "format",
+  "runtime": "quickjs",
+  "entry": "handler.js",
+  "capabilities": [],
+  "limits": {
+    "maxBatchItems": 3600,
+    "maxInputBytes": 8388608,
+    "maxOutputBytes": 8388608,
+    "timeoutMs": 5000,
+    "memoryBytes": 67108864
+  }
+}
