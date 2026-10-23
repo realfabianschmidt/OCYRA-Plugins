@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "plugin_api_version": 1,
   "role": "format",
-  "runtime": "quickjs",
+  "runtime": {
+    "mode": "quickjs"
+  },
   "entry": "handler.js",
   "capabilities": [],
   "limits": {
@@ -13,5 +15,23 @@
     "maxOutputBytes": 8388608,
     "timeoutMs": 5000,
     "memoryBytes": 67108864
+  },
+  "description": "Import and export SubRip subtitles.",
+  "family": "format",
+  "format": {
+    "target": "media-subtitle",
+    "directions": [
+      "import",
+      "export"
+    ],
+    "extensions": [
+      "srt"
+    ]
+  },
+  "binary": false,
+  "locales": {
+    "en": "locales/en.json",
+    "de": "locales/de.json",
+    "fr": "locales/fr.json"
   }
 }

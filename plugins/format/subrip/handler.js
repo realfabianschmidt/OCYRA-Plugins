@@ -1,70 +1,94 @@
-// Q1.5 draft plugin API. The host supplies a typed request and owns its identity.
+// API v1: exact integer ticks, explicit results, no ambient or host access.
 const TICKS_PER_MILLISECOND = 254016000n;
-
-function reject(code) {
-  throw new Error(code);
+const MAX_TICK = 170141183460469231731687303715884105727n;
+class Rejection extends Error {
+  constructor(code, location) {
+    super();
+    this.result = { status: 'error', error: { code, ...(location ? { location } : {}) } };
+  }
 }
-
-function parseTime(value) {
-  const match = /^(\d{2,}):(\d{2}):(\d{2}),(\d{3})$/.exec(value);
-  if (!match) reject('invalid_timestamp');
+function reject(code = 'invalid_input', location) { throw new Rejection(code, location); }
+function shape(value, keys) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+function parseTime(value, line) {
+  const match = /^(\d{2,24}):(\d{2}):(\d{2}),(\d{3})$/.exec(value);
+  if (!match) reject('invalid_input', { line });
   const [, hours, minutes, seconds, millis] = match;
-  if (Number(minutes) > 59 || Number(seconds) > 59) reject('invalid_timestamp');
-  return (((BigInt(hours) * 60n + BigInt(minutes)) * 60n + BigInt(seconds)) * 1000n + BigInt(millis));
+  if (Number(minutes) > 59 || Number(seconds) > 59) reject('invalid_input', { line });
+  const valueMs = ((BigInt(hours) * 60n + BigInt(minutes)) * 60n + BigInt(seconds)) * 1000n + BigInt(millis);
+  if (valueMs * TICKS_PER_MILLISECOND > MAX_TICK) reject('invalid_input', { line });
+  return valueMs;
 }
-
-function formatTime(ticks) {
-  if (typeof ticks !== 'string' || !/^(0|[1-9]\d*)$/.test(ticks)) reject('invalid_output');
-  const value = BigInt(ticks);
-  if (value % TICKS_PER_MILLISECOND !== 0n) reject('invalid_output');
+function tick(value, item) {
+  if (typeof value !== 'string' || value.length > 39 || !/^(0|[1-9]\d*)$/.test(value)) reject('invalid_input', { item });
+  const parsed = BigInt(value);
+  if (parsed > MAX_TICK || parsed % TICKS_PER_MILLISECOND !== 0n) reject('invalid_input', { item });
+  return parsed;
+}
+function formatTime(value) {
   const millis = value / TICKS_PER_MILLISECOND;
-  const hours = millis / 3600000n;
-  const minutes = (millis / 60000n) % 60n;
-  const seconds = (millis / 1000n) % 60n;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(millis % 1000n).padStart(3, '0')}`;
+  return `${String(millis / 3600000n).padStart(2, '0')}:${String((millis / 60000n) % 60n).padStart(2, '0')}:${String((millis / 1000n) % 60n).padStart(2, '0')},${String(millis % 1000n).padStart(3, '0')}`;
 }
-
-function importFile(file) {
-  if (!file || typeof file.content !== 'string' || typeof file.filename !== 'string' ||
-      file.mediaType !== 'application/x-subrip') reject('invalid_input');
-  const input = file.content.replace(/\r\n/g, '\n').trim();
-  if (!input) reject('empty_input');
-  const blocks = input.split(/\n\n+/);
-  const subtitles = blocks.map((block, index) => {
-    const lines = block.split('\n');
-    if (lines.length < 3 || lines[0] !== String(index + 1)) reject('invalid_structure');
-    for (let line = 2; line + 1 < lines.length; line++) {
-      if (/^\d+$/.test(lines[line]) && lines[line + 1].includes('-->')) reject('invalid_structure');
+function importFile(request) {
+  if (request.target !== 'media-subtitle') reject('unsupported_input');
+  const { file } = request;
+  if (!shape(file, ['filename', 'mediaType', 'data']) || typeof file.filename !== 'string'
+      || file.mediaType !== 'application/x-subrip') reject();
+  if (file.data?.encoding !== 'text') reject('unsupported_input');
+  if (!shape(file.data, ['encoding', 'content']) || typeof file.data.content !== 'string') reject();
+  const input = file.data.content.replace(/\r\n/g, '\n');
+  if (!input.trim()) reject('empty_input');
+  const lines = input.split('\n');
+  const subtitles = [];
+  let cursor = 0;
+  while (cursor < lines.length) {
+    if (lines[cursor] === '') { cursor++; continue; }
+    const header = cursor;
+    if (lines[cursor++] !== String(subtitles.length + 1)) reject('invalid_input', { line: header + 1 });
+    const stamp = /^(\S+) --> (\S+)$/.exec(lines[cursor++] ?? '');
+    if (!stamp) reject('invalid_input', { line: header + 2 });
+    const start = parseTime(stamp[1], header + 2);
+    const end = parseTime(stamp[2], header + 2);
+    if (end <= start) reject('invalid_input', { line: header + 2 });
+    const text = [];
+    while (cursor < lines.length && lines[cursor] !== '') {
+      if (/^\d+$/.test(lines[cursor]) && lines[cursor + 1]?.includes('-->')) reject('invalid_input', { line: cursor + 1 });
+      text.push(lines[cursor++]);
     }
-    const times = /^(\S+) --> (\S+)$/.exec(lines[1]);
-    if (!times || lines.slice(2).some((line) => !line)) reject('invalid_structure');
-    const start = parseTime(times[1]);
-    const end = parseTime(times[2]);
-    if (end <= start) reject('invalid_timestamp');
-    return {
-      id: `srt-${index + 1}-${start}-${end}`,
-      startTime: String(start * TICKS_PER_MILLISECOND),
-      endTime: String(end * TICKS_PER_MILLISECOND),
-      text: lines.slice(2).join('\n'),
-    };
-  });
-  return { artifactType: 'FormatImportArtifact', track: { subtitles } };
+    if (!text.length) reject('invalid_input', { line: header + 3 });
+    subtitles.push({ id: `srt-${subtitles.length + 1}-${start}-${end}`,
+      startTime: String(start * TICKS_PER_MILLISECOND), endTime: String(end * TICKS_PER_MILLISECOND), text: text.join('\n') });
+  }
+  return { target: 'media-subtitle', track: { subtitles } };
 }
-
-function exportTrack(track) {
-  if (!track || !Array.isArray(track.subtitles)) reject('invalid_input');
-  const text = track.subtitles.map((cue, index) => {
-    if (typeof cue.text !== 'string' || !cue.text) reject('invalid_input');
-    return `${index + 1}\n${formatTime(cue.startTime)} --> ${formatTime(cue.endTime)}\n${cue.text}`;
+function exportTrack(request) {
+  if (typeof request.language !== 'string' || !request.language) reject();
+  const { artifact } = request;
+  if (!shape(artifact, ['target', 'track']) || artifact.target !== 'media-subtitle') reject('unsupported_input');
+  if (!shape(artifact.track, ['subtitles']) || !Array.isArray(artifact.track.subtitles)) reject();
+  if (!artifact.track.subtitles.length) reject('empty_input');
+  const ids = new Set();
+  const content = artifact.track.subtitles.map((cue, index) => {
+    const item = index + 1;
+    if (!shape(cue, ['id', 'startTime', 'endTime', 'text']) || typeof cue.id !== 'string' || !cue.id
+        || ids.has(cue.id) || typeof cue.text !== 'string' || !cue.text) reject('invalid_input', { item });
+    ids.add(cue.id);
+    const start = tick(cue.startTime, item);
+    const end = tick(cue.endTime, item);
+    if (end <= start) reject('invalid_input', { item });
+    return `${item}\n${formatTime(start)} --> ${formatTime(end)}\n${cue.text}`;
   }).join('\n\n') + '\n\n';
-  return {
-    artifactType: 'RawFileArtifact',
-    file: { filename: 'subtitles.srt', mediaType: 'application/x-subrip', content: text },
-  };
+  return { filename: 'subtitles.srt', mediaType: 'application/x-subrip', data: { encoding: 'text', content } };
 }
-
-globalThis.ocyraPlugin = async (request) => {
-  if (request.operation === 'import') return importFile(request.file);
-  if (request.operation === 'export') return exportTrack(request.track);
-  reject('invalid_input');
-};
+export default async function run(request) {
+  try {
+    const artifact = shape(request, ['target', 'file']) ? importFile(request)
+      : shape(request, ['language', 'artifact']) ? exportTrack(request) : reject();
+    return { status: 'ok', artifact };
+  } catch (error) {
+    if (error instanceof Rejection) return error.result;
+    throw error;
+  }
+}

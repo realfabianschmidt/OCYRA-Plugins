@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import test from 'node:test';
+import runSubrip from '../../plugins/format/subrip/handler.js';
 
 function handler(path) {
   const context = {};
@@ -10,18 +11,17 @@ function handler(path) {
   return context.ocyraPlugin;
 }
 
-const subrip = join('plugins', 'format', 'subrip');
 const audit = join('plugins', 'audit', 'foundation-policy');
 
 test('SRT package preserves exact millisecond timestamps', async () => {
-  const run = handler(join(subrip, 'handler.js'));
-  const result = await run({ operation: 'import', file: {
+  const run = runSubrip;
+  const result = await run({ target: 'media-subtitle', file: {
     filename: 'sample.srt', mediaType: 'application/x-subrip',
-    content: '1\n00:59:59,499 --> 01:00:01,000\nHello\n',
+    data: { encoding: 'text', content: '1\n00:59:59,499 --> 01:00:01,000\nHello\n' },
   } });
-  assert.equal(result.track.subtitles[0].startTime, String(3_599_499n * 254016000n));
-  const exported = await run({ operation: 'export', track: result.track });
-  assert.equal(exported.file.content, '1\n00:59:59,499 --> 01:00:01,000\nHello\n\n');
+  assert.equal(result.artifact.track.subtitles[0].startTime, String(3_599_499n * 254016000n));
+  const exported = await run({ language: 'de', artifact: result.artifact });
+  assert.equal(exported.artifact.data.content, '1\n00:59:59,499 --> 01:00:01,000\nHello\n\n');
 });
 
 test('synthetic policy resolves and marks video-only checks na for localization', async () => {
