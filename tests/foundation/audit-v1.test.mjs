@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 import * as module from '../../plugins/audit/foundation-policy/handler.js';
 const run = module.default;
 
+const manifest = JSON.parse(readFileSync('plugins/audit/foundation-policy/manifest.json', 'utf8'));
+test('audit manifest omits all format-only fields as required by the Rust SDK', () => {
+  for (const field of ['binary', 'format', 'documentKind']) assert.equal(Object.hasOwn(manifest, field), false);
+  assert.equal(manifest.family, 'audit');
+  assert.equal(manifest.role, 'audit.policy-provider');
+});
 const content = readFileSync('plugins/audit/foundation-policy/policy.json', 'utf8');
 const host = { data: { read: async (request) => {
   assert.deepEqual(request, { path: 'policy.json' });
