@@ -1,8 +1,8 @@
 # OCYRA first-party plugins
 
 This repository owns the v3 first-party plugin packages. SubRip now uses the sole API-v1
-ES-module entry and explicit results. The foundation audit package remains a Q1.5 fixture
-until the host.data.read response contract is decided. No package is signed or installed yet.
+ES-module entry and explicit results. The synthetic foundation audit package also uses API v1,
+including the structured host.data.read response. No package is signed or installed yet.
 
 Run npm run verify, then npm run test:reference -- --reference <app GP02 directory>.
 The reference path is an explicit checkout argument; no app source is copied here.

@@ -4,14 +4,28 @@
   "version": "0.1.0",
   "plugin_api_version": 1,
   "role": "audit.policy-provider",
-  "runtime": "quickjs",
+  "runtime": {
+    "mode": "quickjs"
+  },
   "entry": "handler.js",
-  "capabilities": ["host.data.read"],
+  "capabilities": [
+    {
+      "kind": "host.data.read"
+    }
+  ],
   "limits": {
     "maxBatchItems": 3600,
     "maxInputBytes": 8388608,
     "maxOutputBytes": 8388608,
     "timeoutMs": 5000,
     "memoryBytes": 67108864
+  },
+  "description": "Synthetic foundation audit policy fixture.",
+  "family": "audit",
+  "binary": false,
+  "locales": {
+    "en": "locales/en.json",
+    "de": "locales/de.json",
+    "fr": "locales/fr.json"
   }
 }

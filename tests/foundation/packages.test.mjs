@@ -1,15 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { runInNewContext } from 'node:vm';
 import test from 'node:test';
 import runSubrip from '../../plugins/format/subrip/handler.js';
 
-function handler(path) {
-  const context = {};
-  runInNewContext(readFileSync(path, 'utf8'), context, { timeout: 1000 });
-  return context.ocyraPlugin;
-}
+import runAudit from '../../plugins/audit/foundation-policy/handler.js';
 
 const audit = join('plugins', 'audit', 'foundation-policy');
 
@@ -25,20 +20,21 @@ test('SRT package preserves exact millisecond timestamps', async () => {
 });
 
 test('synthetic policy resolves and marks video-only checks na for localization', async () => {
-  const run = handler(join(audit, 'handler.js'));
+  const run = runAudit;
   const policy = readFileSync(join(audit, 'policy.json'), 'utf8');
   const host = { data: { read: async (path) => {
-    assert.equal(path, 'policy.json');
-    return policy;
+    assert.deepEqual(path, { path: 'policy.json' });
+    return { content: policy };
   } } };
   const resolved = await run({ requestKind: 'resolve-policy', profileId: 'foundation-fixture' }, host);
-  assert.equal(resolved.policy.profileId, 'foundation-fixture');
+  assert.equal(resolved.status, 'ok');
+  assert.equal(resolved.artifact.policy.profileId, 'foundation-fixture');
   const report = await run({ requestKind: 'evaluate-audit', profileId: 'foundation-fixture',
     facts: { scope: 'localization-units', locale: 'de', units: [{
       id: 'u1', key: 'hello', documentId: 'd1', sourceLength: 5, targetLength: 0,
       hasTarget: false, reviewed: false, approved: false,
     }] },
   }, host);
-  assert.equal(report.report.failCount, 1);
-  assert.equal(report.report.checklist[1].status, 'na');
+  assert.equal(report.artifact.report.failCount, 1);
+  assert.equal(report.artifact.report.checklist[1].status, 'na');
 });
