@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test tests/foundation/*.test.mjs",
     "test:reference": "node tests/gp02.mjs",
-    "verify": "npm test"
+    "verify": "npm test",
+    "build:development": "node tools/build-development.mjs"
   }
 }
